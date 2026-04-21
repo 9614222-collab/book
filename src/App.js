@@ -385,30 +385,19 @@ export default function App() {
     vocabRefs.current={};
   }
 
-  function checkAnswer(userAns, correctAns) {
-    const u = userAns.trim().replace(/\s+/g," ");
-    const c = correctAns.trim().replace(/\s+/g," ");
-    if(!u) return false;
-    if(u===c) return true; // 완전 일치
-    if(c.includes(u)||u.includes(c)) return true; // 포함 관계
-    // 핵심 단어 추출해서 비교
-    const cWords = c.split(/[\s,·]+/).filter(w=>w.length>1);
-    const uWords = u.split(/[\s,·]+/).filter(w=>w.length>1);
-    const matchCount = cWords.filter(cw=>uWords.some(uw=>cw.includes(uw)||uw.includes(cw))).length;
-    if(cWords.length>0 && matchCount/cWords.length >= 0.5) return true; // 핵심 단어 50% 이상 일치
-    // 글자 유사도 (자카드 유사도)
-    const cSet = new Set(c.split(""));
-    const uSet = new Set(u.split(""));
-    const intersection = [...cSet].filter(ch=>uSet.has(ch)).length;
-    const union = new Set([...cSet,...uSet]).size;
-    return intersection/union >= 0.6; // 60% 이상 유사
-  }
+  const [vocabGrading, setVocabGrading] = useState(false);
+  const [manualScores, setManualScores] = useState({});
 
   function submitVocabTest() {
     const finalAns={...vocabTestAnswers};
     Object.keys(vocabRefs.current).forEach(k=>{ finalAns[k]=vocabRefs.current[k]?.value||""; });
-    const scores=vocabTest.map((v,i)=>checkAnswer(finalAns[i]||"", v.meaning));
-    setVocabTestResult({scores, total:scores.filter(Boolean).length, answers:finalAns});
+    setManualScores({});
+    setVocabTestResult({scores:null, answers:finalAns});
+  }
+
+  function confirmManualScore() {
+    const scores = vocabTest.map((_,i)=>manualScores[i]===true);
+    setVocabTestResult(prev=>({...prev, scores, total:scores.filter(Boolean).length}));
   }
 
   // Chat
@@ -833,14 +822,47 @@ export default function App() {
             </div>
           ))}
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>{setVocabTest(null);setVocabTestResult(null);}} style={{flex:1,padding:12,borderRadius:10,border:"2px solid #e2e8f0",background:"white",color:"#64748b",fontWeight:700,cursor:"pointer"}}>취소</button>
-            <button onClick={submitVocabTest} style={{flex:2,padding:12,borderRadius:10,border:"none",background:`linear-gradient(135deg,${COLORS.orange},${COLORS.red})`,color:"white",fontWeight:800,cursor:"pointer"}}>제출하기 🎯</button>
+            <button onClick={()=>{setVocabTest(null);setVocabTestResult(null);setManualScores({});}} style={{flex:1,padding:12,borderRadius:10,border:"2px solid #e2e8f0",background:"white",color:"#64748b",fontWeight:700,cursor:"pointer"}}>취소</button>
+            <button onClick={submitVocabTest} style={{flex:2,padding:12,borderRadius:10,border:"none",background:`linear-gradient(135deg,${COLORS.orange},${COLORS.red})`,color:"white",fontWeight:800,cursor:"pointer"}}>
+              제출하기 🎯
+            </button>
           </div>
         </Card>
       )}
 
-      {/* 테스트 결과 */}
-      {vocabTestResult&&(
+      {/* 테스트 결과 - 자가채점 */}
+      {vocabTestResult&&!vocabTestResult.scores&&(
+        <Card style={{border:"2px solid #f59e0b"}}>
+          <div style={{fontWeight:800,color:COLORS.orange,marginBottom:4}}>🔍 정답 확인 후 채점하세요!</div>
+          <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>정답을 보고 내 답이 맞으면 ✅, 틀리면 ❌ 눌러주세요</div>
+          {vocabTest.map((v,i)=>(
+            <div key={i} style={{background:"#f8fafc",borderRadius:12,padding:12,marginBottom:10}}>
+              <div style={{fontWeight:800,color:COLORS.primary,fontSize:15,marginBottom:4}}>{v.word}</div>
+              <div style={{fontSize:13,color:"#64748b",marginBottom:4}}>📝 정답: <strong style={{color:"#1e293b"}}>{v.meaning}</strong></div>
+              <div style={{fontSize:13,color:"#64748b",marginBottom:8}}>✏️ 내 답: <strong style={{color:COLORS.purple}}>{vocabTestResult.answers?.[i]||"(미작성)"}</strong></div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>setManualScores(p=>({...p,[i]:true}))}
+                  style={{flex:1,padding:"10px 0",borderRadius:10,border:"none",background:manualScores[i]===true?"#10b981":"#f1f5f9",color:manualScores[i]===true?"white":"#64748b",fontWeight:800,fontSize:15,cursor:"pointer"}}>
+                  ✅ 맞음
+                </button>
+                <button onClick={()=>setManualScores(p=>({...p,[i]:false}))}
+                  style={{flex:1,padding:"10px 0",borderRadius:10,border:"none",background:manualScores[i]===false?"#ef4444":"#f1f5f9",color:manualScores[i]===false?"white":"#64748b",fontWeight:800,fontSize:15,cursor:"pointer"}}>
+                  ❌ 틀림
+                </button>
+              </div>
+            </div>
+          ))}
+          <button
+            onClick={confirmManualScore}
+            disabled={Object.keys(manualScores).length < vocabTest.length}
+            style={{width:"100%",padding:13,borderRadius:12,border:"none",background:Object.keys(manualScores).length<vocabTest.length?"#cbd5e1":"linear-gradient(135deg,#f59e0b,#ef4444)",color:"white",fontWeight:800,fontSize:15,cursor:Object.keys(manualScores).length<vocabTest.length?"not-allowed":"pointer",marginTop:4}}>
+            {Object.keys(manualScores).length<vocabTest.length?`${Object.keys(manualScores).length}/${vocabTest.length} 채점 중...`:"🎯 최종 결과 보기"}
+          </button>
+        </Card>
+      )}
+
+      {/* 최종 결과 */}
+      {vocabTestResult?.scores&&(
         <Card style={{border:"2px solid #10b981"}}>
           <div style={{textAlign:"center",padding:"10px 0",marginBottom:12}}>
             <div style={{fontSize:36}}>{vocabTestResult.total===vocabTest.length?"🎉":vocabTestResult.total>=vocabTest.length/2?"👍":"💪"}</div>
@@ -864,7 +886,7 @@ export default function App() {
               </div>
             </div>
           ))}
-          <button onClick={()=>{setVocabTest(null);setVocabTestResult(null);}} style={{width:"100%",marginTop:12,padding:12,borderRadius:10,border:"none",background:"linear-gradient(135deg,#10b981,#3b82f6)",color:"white",fontWeight:700,cursor:"pointer"}}>
+          <button onClick={()=>{setVocabTest(null);setVocabTestResult(null);setManualScores({});}} style={{width:"100%",marginTop:12,padding:12,borderRadius:10,border:"none",background:"linear-gradient(135deg,#10b981,#3b82f6)",color:"white",fontWeight:700,cursor:"pointer"}}>
             다시 테스트하기 🔄
           </button>
         </Card>
