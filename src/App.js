@@ -342,12 +342,13 @@ export default function App() {
   }
 
   // 단어장
-  const [vocab, setVocab] = useState([]); // [{word, meaning, book, date}]
-  const [vocabInput, setVocabInput] = useState({word:"", meaning:""});
-  const [vocabTest, setVocabTest] = useState(null); // 테스트 모드
+  const [vocab, setVocab] = useState([]);
   const [vocabTestAnswers, setVocabTestAnswers] = useState({});
+  const [vocabTest, setVocabTest] = useState(null);
   const [vocabTestResult, setVocabTestResult] = useState(null);
   const vocabRefs = useRef({});
+  const wordRef = useRef(null);
+  const meaningRef = useRef(null);
 
   useEffect(()=>{
     if(name) loadVocab();
@@ -359,11 +360,14 @@ export default function App() {
   }
 
   async function addVocab() {
-    if(!vocabInput.word.trim()||!vocabInput.meaning.trim()){alert("단어와 뜻을 모두 입력해주세요!");return;}
-    const newVocab=[...vocab,{word:vocabInput.word.trim(),meaning:vocabInput.meaning.trim(),book:todayBook?.title||"",date:getTodayStr()}];
+    const word = wordRef.current?.value?.trim();
+    const meaning = meaningRef.current?.value?.trim();
+    if(!word||!meaning){alert("단어와 뜻을 모두 입력해주세요!");return;}
+    const newVocab=[...vocab,{word,meaning,book:todayBook?.title||"",date:getTodayStr()}];
     setVocab(newVocab);
     await saveData(`vocab_${name}`,newVocab);
-    setVocabInput({word:"",meaning:""});
+    if(wordRef.current) wordRef.current.value="";
+    if(meaningRef.current) meaningRef.current.value="";
   }
 
   async function deleteVocab(idx) {
@@ -780,11 +784,9 @@ export default function App() {
       <Card>
         <div style={{fontWeight:800,color:"#1e293b",marginBottom:10}}>✏️ 새 단어 추가</div>
         <div style={{display:"flex",gap:8,marginBottom:8}}>
-          <input value={vocabInput.word} onChange={e=>setVocabInput(p=>({...p,word:e.target.value}))}
-            placeholder="모르는 단어"
+          <input ref={wordRef} placeholder="모르는 단어"
             style={{flex:1,padding:"10px 12px",borderRadius:10,border:"1.5px solid #e2e8f0",fontSize:14,fontFamily:"inherit"}}/>
-          <input value={vocabInput.meaning} onChange={e=>setVocabInput(p=>({...p,meaning:e.target.value}))}
-            placeholder="뜻"
+          <input ref={meaningRef} placeholder="뜻"
             style={{flex:1,padding:"10px 12px",borderRadius:10,border:"1.5px solid #e2e8f0",fontSize:14,fontFamily:"inherit"}}/>
         </div>
         <button onClick={addVocab} style={{width:"100%",padding:"10px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#10b981,#3b82f6)",color:"white",fontWeight:700,cursor:"pointer"}}>
