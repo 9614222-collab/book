@@ -130,7 +130,19 @@ const DEFAULT_BOOKS = [
       {q:"주인공의 단짝 친구는 이사를 갔다.",type:"ox",answer:"O",hint:"이야기의 시작을 생각해봐요!"},
       {q:"주인공은 새 친구를 쉽게 사귀었다.",type:"ox",answer:"X",hint:"주인공이 어떤 감정을 느꼈는지 떠올려봐요!"},
       {q:"진정한 우정이란 무엇이라고 생각하나요?",type:"short",answer:"자유 답변",hint:"책 속 친구 관계를 생각해봐요!"},
-      {q:"이 
+      {q:"이 책은 이별과 새로운 만남에 대해 이야기한다.",type:"ox",answer:"O",hint:"책의 주제를 생각해봐요!"},
+    ],
+    feedbackTips:["책 속 주인공의 감정에 공감하며 썼나요?","우정의 소중함에 대해 자신의 생각을 표현했나요?","자신의 친구 관계와 연결해서 생각했나요?"]
+  },
+  { id:24, title:"꼴찌라도 괜찮아", author:"고정욱", emoji:"🏃", pages:"176p", level:"★☆☆", grade:"5학년", summary:"달리기를 못하는 소년이 포기하지 않고 도전하면서 자신감을 찾아가는 따뜻한 이야기",
+    quizzes:[
+      {q:"주인공은 달리기를 잘했다.",type:"ox",answer:"X",hint:"주인공의 고민을 생각해봐요!"},
+      {q:"꼴찌여도 포기하지 않고 끝까지 달리는 것이 중요하다.",type:"ox",answer:"O",hint:"책의 메시지를 생각해봐요!"},
+      {q:"이 책에서 가장 감동적인 장면은 어디였나요?",type:"short",answer:"자유 답변",hint:"주인공이 달리기를 하는 장면을 떠올려봐요!"},
+      {q:"이 책은 결과보다 과정이 중요하다는 것을 알려준다.",type:"ox",answer:"O",hint:"책의 주제를 생각해봐요!"},
+    ],
+    feedbackTips:["주인공의 도전 정신에서 배운 점을 썼나요?","포기하지 않는 것의 의미에 대해 표현했나요?","내가 힘들었지만 끝까지 해낸 경험을 연결해서 썼나요?"]
+  },
   // ── 4학년 ──
   { id:16, title:"강아지똥", author:"권정생", emoji:"🐶", pages:"40p", level:"★☆☆", grade:"4학년", summary:"보잘것없어 보이는 강아지똥이 민들레 꽃을 피우는 데 꼭 필요한 존재임을 깨닫는 이야기",
     quizzes:[
@@ -297,16 +309,20 @@ export default function App() {
     return {qc,rc,cc,total,level:lvl,streak,earned};
   }
 
-  // Quiz
+  // Quiz - 주관식 입력 버그 수정 (ref 사용)
   const [quizAnswers,setQuizAnswers]=useState({});
   const [quizResult,setQuizResult]=useState(null);
+  const quizRefs=useRef({});
 
-  function startQuiz() { setQuizAnswers({}); setQuizResult(null); setScreen("quiz"); }
+  function startQuiz() { setQuizAnswers({}); setQuizResult(null); quizRefs.current={}; setScreen("quiz"); }
 
   function submitQuiz() {
     if(!todayBook?.quizzes) return;
+    // ref에서 최신 값 읽기
+    const finalAnswers={...quizAnswers};
+    Object.keys(quizRefs.current).forEach(k=>{ finalAnswers[k]=quizRefs.current[k].value||""; });
     const scores=todayBook.quizzes.map((q,i)=>{
-      const ans=(quizAnswers[i]||"").trim().toLowerCase();
+      const ans=(finalAnswers[i]||"").trim().toLowerCase();
       if(q.type==="ox") return ans===q.answer.toLowerCase();
       return ans.length>0;
     });
@@ -323,6 +339,56 @@ export default function App() {
     if(review.trim().length<20){alert("소감문을 20자 이상 써주세요!");return;}
     setReviewSubmitted(true);
     saveRecord("review",{text:review.slice(0,50),book:todayBook?.title});
+  }
+
+  // 단어장
+  const [vocab, setVocab] = useState([]); // [{word, meaning, book, date}]
+  const [vocabInput, setVocabInput] = useState({word:"", meaning:""});
+  const [vocabTest, setVocabTest] = useState(null); // 테스트 모드
+  const [vocabTestAnswers, setVocabTestAnswers] = useState({});
+  const [vocabTestResult, setVocabTestResult] = useState(null);
+  const vocabRefs = useRef({});
+
+  useEffect(()=>{
+    if(name) loadVocab();
+  },[name]);
+
+  async function loadVocab() {
+    const v = await loadData(`vocab_${name}`) || [];
+    setVocab(v);
+  }
+
+  async function addVocab() {
+    if(!vocabInput.word.trim()||!vocabInput.meaning.trim()){alert("단어와 뜻을 모두 입력해주세요!");return;}
+    const newVocab=[...vocab,{word:vocabInput.word.trim(),meaning:vocabInput.meaning.trim(),book:todayBook?.title||"",date:getTodayStr()}];
+    setVocab(newVocab);
+    await saveData(`vocab_${name}`,newVocab);
+    setVocabInput({word:"",meaning:""});
+  }
+
+  async function deleteVocab(idx) {
+    const updated=vocab.filter((_,i)=>i!==idx);
+    setVocab(updated);
+    await saveData(`vocab_${name}`,updated);
+  }
+
+  function startVocabTest() {
+    if(vocab.length<2){alert("단어가 2개 이상 있어야 테스트할 수 있어요!");return;}
+    const shuffled=[...vocab].sort(()=>Math.random()-0.5).slice(0,Math.min(vocab.length,10));
+    setVocabTest(shuffled);
+    setVocabTestAnswers({});
+    setVocabTestResult(null);
+    vocabRefs.current={};
+  }
+
+  function submitVocabTest() {
+    const finalAns={...vocabTestAnswers};
+    Object.keys(vocabRefs.current).forEach(k=>{ finalAns[k]=vocabRefs.current[k]?.value||""; });
+    const scores=vocabTest.map((v,i)=>{
+      const ans=(finalAns[i]||"").trim();
+      return ans===v.meaning||v.meaning.includes(ans)&&ans.length>1;
+    });
+    setVocabTestResult({scores,total:scores.filter(Boolean).length});
   }
 
   // Chat
@@ -557,6 +623,7 @@ export default function App() {
         </Card>
         <div style={{display:"flex",gap:10}}>
           <button onClick={()=>setScreen("records")} style={{flex:1,padding:13,borderRadius:14,border:"2px solid #e2e8f0",background:"white",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}}>📅 나의 기록</button>
+          <button onClick={()=>setScreen("vocab")} style={{flex:1,padding:13,borderRadius:14,border:"2px solid #e2e8f0",background:"white",color:"#10b981",fontWeight:700,fontSize:13,cursor:"pointer"}}>📖 단어장 {vocab.length>0?`(${vocab.length})`:"" }</button>
           <button onClick={()=>setScreen("login")} style={{padding:13,borderRadius:14,border:"2px solid #e2e8f0",background:"white",color:"#94a3b8",fontWeight:700,fontSize:13,cursor:"pointer"}}>로그아웃</button>
         </div>
       </div>
@@ -580,7 +647,10 @@ export default function App() {
                   ))}
                 </div>
               ):(
-                <input value={quizAnswers[i]||""} onChange={e=>setQuizAnswers(p=>({...p,[i]:e.target.value}))} placeholder="답을 써보세요..."
+                <input
+                  ref={el=>quizRefs.current[i]=el}
+                  defaultValue={quizAnswers[i]||""}
+                  placeholder="답을 써보세요..."
                   style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #e2e8f0",fontSize:14,fontFamily:"inherit"}}/>
               )}
               <div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>💡 {q.hint}</div>
@@ -698,6 +768,101 @@ export default function App() {
           <button onClick={()=>setScreen("home")} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"linear-gradient(135deg,#f59e0b,#ef4444)",color:"white",fontWeight:800,fontSize:14,cursor:"pointer"}}>🏠 홈으로 돌아가기</button>
         </div>
       )}
+    </div>
+  );
+
+  // VOCAB 단어장
+  if(screen==="vocab") return(
+    <div style={wrap}>
+      <BackHeader title="📖 나의 단어장" bg="linear-gradient(135deg,#10b981,#3b82f6)"/>
+
+      {/* 단어 추가 */}
+      <Card>
+        <div style={{fontWeight:800,color:"#1e293b",marginBottom:10}}>✏️ 새 단어 추가</div>
+        <div style={{display:"flex",gap:8,marginBottom:8}}>
+          <input value={vocabInput.word} onChange={e=>setVocabInput(p=>({...p,word:e.target.value}))}
+            placeholder="모르는 단어"
+            style={{flex:1,padding:"10px 12px",borderRadius:10,border:"1.5px solid #e2e8f0",fontSize:14,fontFamily:"inherit"}}/>
+          <input value={vocabInput.meaning} onChange={e=>setVocabInput(p=>({...p,meaning:e.target.value}))}
+            placeholder="뜻"
+            style={{flex:1,padding:"10px 12px",borderRadius:10,border:"1.5px solid #e2e8f0",fontSize:14,fontFamily:"inherit"}}/>
+        </div>
+        <button onClick={addVocab} style={{width:"100%",padding:"10px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#10b981,#3b82f6)",color:"white",fontWeight:700,cursor:"pointer"}}>
+          + 단어 추가
+        </button>
+      </Card>
+
+      {/* 테스트 버튼 */}
+      {vocab.length>=2&&!vocabTest&&(
+        <button onClick={startVocabTest} style={{width:"100%",padding:14,borderRadius:14,border:"none",background:"linear-gradient(135deg,#f59e0b,#ef4444)",color:"white",fontWeight:800,fontSize:15,cursor:"pointer",marginBottom:12,boxShadow:"0 3px 12px rgba(245,158,11,0.3)"}}>
+          🎯 단어 테스트 시작! ({Math.min(vocab.length,10)}문제)
+        </button>
+      )}
+
+      {/* 단어 테스트 */}
+      {vocabTest&&!vocabTestResult&&(
+        <Card style={{border:"2px solid #f59e0b"}}>
+          <div style={{fontWeight:800,color:COLORS.orange,marginBottom:12}}>🎯 단어 테스트</div>
+          {vocabTest.map((v,i)=>(
+            <div key={i} style={{marginBottom:14}}>
+              <div style={{fontWeight:700,color:"#1e293b",fontSize:15,marginBottom:6}}>Q{i+1}. <span style={{color:COLORS.primary}}>{v.word}</span> 의 뜻은?</div>
+              <div style={{fontSize:11,color:"#94a3b8",marginBottom:6}}>📖 {v.book}</div>
+              <input
+                ref={el=>vocabRefs.current[i]=el}
+                defaultValue={vocabTestAnswers[i]||""}
+                placeholder="뜻을 써보세요..."
+                style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid #e2e8f0",fontSize:14,fontFamily:"inherit"}}/>
+            </div>
+          ))}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{setVocabTest(null);setVocabTestResult(null);}} style={{flex:1,padding:12,borderRadius:10,border:"2px solid #e2e8f0",background:"white",color:"#64748b",fontWeight:700,cursor:"pointer"}}>취소</button>
+            <button onClick={submitVocabTest} style={{flex:2,padding:12,borderRadius:10,border:"none",background:`linear-gradient(135deg,${COLORS.orange},${COLORS.red})`,color:"white",fontWeight:800,cursor:"pointer"}}>제출하기 🎯</button>
+          </div>
+        </Card>
+      )}
+
+      {/* 테스트 결과 */}
+      {vocabTestResult&&(
+        <Card style={{border:"2px solid #10b981"}}>
+          <div style={{textAlign:"center",padding:"10px 0",marginBottom:12}}>
+            <div style={{fontSize:36}}>{vocabTestResult.total===vocabTest.length?"🎉":vocabTestResult.total>=vocabTest.length/2?"👍":"💪"}</div>
+            <div style={{fontWeight:800,fontSize:20,color:COLORS.primary,marginTop:6}}>{vocabTestResult.total}/{vocabTest.length} 정답!</div>
+            <div style={{fontSize:13,color:"#64748b",marginTop:4}}>
+              {vocabTestResult.total===vocabTest.length?"완벽해요! 모든 단어를 외웠어요!":vocabTestResult.total>=vocabTest.length/2?"절반 이상 맞았어요! 조금만 더 연습해봐요!":"다시 한번 단어장을 읽고 도전해봐요!"}
+            </div>
+          </div>
+          {vocabTest.map((v,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
+              <span style={{fontSize:18}}>{vocabTestResult.scores[i]?"✅":"❌"}</span>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:700,fontSize:14,color:COLORS.primary}}>{v.word}</div>
+                <div style={{fontSize:12,color:"#64748b"}}>정답: {v.meaning}</div>
+              </div>
+            </div>
+          ))}
+          <button onClick={()=>{setVocabTest(null);setVocabTestResult(null);}} style={{width:"100%",marginTop:12,padding:12,borderRadius:10,border:"none",background:"linear-gradient(135deg,#10b981,#3b82f6)",color:"white",fontWeight:700,cursor:"pointer"}}>
+            다시 테스트하기 🔄
+          </button>
+        </Card>
+      )}
+
+      {/* 단어 목록 */}
+      <Card>
+        <div style={{fontWeight:800,color:"#1e293b",marginBottom:10}}>📚 내 단어장 ({vocab.length}개)</div>
+        {vocab.length===0&&<div style={{fontSize:13,color:"#94a3b8",textAlign:"center",padding:"20px 0"}}>아직 단어가 없어요!<br/>책을 읽다가 모르는 단어를 추가해봐요 😊</div>}
+        {vocab.map((v,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,color:COLORS.primary,fontSize:15}}>{v.word}</div>
+              <div style={{fontSize:13,color:"#1e293b",marginTop:2}}>{v.meaning}</div>
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>📖 {v.book} · {v.date}</div>
+            </div>
+            <button onClick={()=>deleteVocab(i)} style={{background:"#fee2e2",border:"none",color:"#ef4444",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:12,fontWeight:700}}>삭제</button>
+          </div>
+        ))}
+      </Card>
+
+      <GBtn label="🏠 홈으로" onClick={()=>setScreen("home")} bg="linear-gradient(135deg,#10b981,#3b82f6)" full/>
     </div>
   );
 
