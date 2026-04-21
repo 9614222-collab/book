@@ -385,14 +385,30 @@ export default function App() {
     vocabRefs.current={};
   }
 
+  function checkAnswer(userAns, correctAns) {
+    const u = userAns.trim().replace(/\s+/g," ");
+    const c = correctAns.trim().replace(/\s+/g," ");
+    if(!u) return false;
+    if(u===c) return true; // 완전 일치
+    if(c.includes(u)||u.includes(c)) return true; // 포함 관계
+    // 핵심 단어 추출해서 비교
+    const cWords = c.split(/[\s,·]+/).filter(w=>w.length>1);
+    const uWords = u.split(/[\s,·]+/).filter(w=>w.length>1);
+    const matchCount = cWords.filter(cw=>uWords.some(uw=>cw.includes(uw)||uw.includes(cw))).length;
+    if(cWords.length>0 && matchCount/cWords.length >= 0.5) return true; // 핵심 단어 50% 이상 일치
+    // 글자 유사도 (자카드 유사도)
+    const cSet = new Set(c.split(""));
+    const uSet = new Set(u.split(""));
+    const intersection = [...cSet].filter(ch=>uSet.has(ch)).length;
+    const union = new Set([...cSet,...uSet]).size;
+    return intersection/union >= 0.6; // 60% 이상 유사
+  }
+
   function submitVocabTest() {
     const finalAns={...vocabTestAnswers};
     Object.keys(vocabRefs.current).forEach(k=>{ finalAns[k]=vocabRefs.current[k]?.value||""; });
-    const scores=vocabTest.map((v,i)=>{
-      const ans=(finalAns[i]||"").trim();
-      return ans===v.meaning||v.meaning.includes(ans)&&ans.length>1;
-    });
-    setVocabTestResult({scores,total:scores.filter(Boolean).length});
+    const scores=vocabTest.map((v,i)=>checkAnswer(finalAns[i]||"", v.meaning));
+    setVocabTestResult({scores, total:scores.filter(Boolean).length, answers:finalAns});
   }
 
   // Chat
@@ -834,11 +850,17 @@ export default function App() {
             </div>
           </div>
           {vocabTest.map((v,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
-              <span style={{fontSize:18}}>{vocabTestResult.scores[i]?"✅":"❌"}</span>
+            <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
+              <span style={{fontSize:18,marginTop:2}}>{vocabTestResult.scores[i]?"✅":"❌"}</span>
               <div style={{flex:1}}>
                 <div style={{fontWeight:700,fontSize:14,color:COLORS.primary}}>{v.word}</div>
-                <div style={{fontSize:12,color:"#64748b"}}>정답: {v.meaning}</div>
+                <div style={{fontSize:12,color:"#64748b",marginTop:2}}>정답: <strong>{v.meaning}</strong></div>
+                {!vocabTestResult.scores[i]&&(
+                  <div style={{fontSize:12,color:"#ef4444",marginTop:2}}>내 답: {vocabTestResult.answers?.[i]||"(미작성)"}</div>
+                )}
+                {vocabTestResult.scores[i]&&(
+                  <div style={{fontSize:11,color:"#10b981",marginTop:2}}>잘 했어요! 👍</div>
+                )}
               </div>
             </div>
           ))}
